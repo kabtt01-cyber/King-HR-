@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { UserSession } from '../types';
 import { 
   UserCog, UserPlus, Shield, User, Trash2, Mail, 
-  Lock, CheckCircle2, XCircle, Search, Filter, KeyRound, AlertCircle
+  Lock, CheckCircle2, XCircle, Search, Filter, KeyRound, AlertCircle, Database
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { createClient } from '@supabase/supabase-js';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 interface SystemUser {
   id: string;
@@ -53,24 +53,42 @@ export default function UsersPage() {
     }
   }, [toast]);
 
-  const loadUsers = () => {
-    const localUsers = localStorage.getItem('hr_system_users_list');
-    if (localUsers) {
-      try {
-        setUsers(JSON.parse(localUsers));
-      } catch (e) {
-        setUsers(getInitialSystemUsers());
-      }
-    } else {
-      const initial = getInitialSystemUsers();
-      setUsers(initial);
-      localStorage.setItem('hr_system_users_list', JSON.stringify(initial));
+  const loadUsers = async () => {
+    if (!isSupabaseConfigured) {
+      setUsers(getInitialSystemUsers());
+      return;
     }
-  };
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('system_users')
+        .select('*')
+        .order('created_at', { ascending: true });
 
-  const saveUsers = (updatedList: SystemUser[]) => {
-    setUsers(updatedList);
-    localStorage.setItem('hr_system_users_list', JSON.stringify(updatedList));
+      if (error) {
+        throw error;
+      }
+
+      if (data && data.length > 0) {
+        setUsers(data as SystemUser[]);
+      } else {
+        // Seeding initial system users if table is empty
+        const initial = getInitialSystemUsers();
+        const { error: seedError } = await supabase
+          .from('system_users')
+          .insert(initial);
+        if (!seedError) {
+          setUsers(initial);
+        } else {
+          setUsers(initial);
+        }
+      }
+    } catch (err: any) {
+      console.error('Failed to load system users from Supabase:', err);
+      setUsers(getInitialSystemUsers());
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getInitialSystemUsers = (): SystemUser[] => {
@@ -142,76 +160,54 @@ export default function UsersPage() {
       return;
     }
 
-    const newUser: SystemUser = {
-      id: Math.random().toString(36).substring(2, 11),
-      name: formData.name,
-      username: trimmedUsername,
-      email: formData.email.trim(),
-      role: formData.role,
-      status: formData.status,
-      password: formData.password,
-      created_at: new Date().toISOString().split('T')[0],
-    };
-
-    // If Supabase environment is active, attempt to register user in Supabase Authentication
-    const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL || '';
-    const supabaseAnonKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || '';
-    
-    if (supabaseUrl && supabaseAnonKey && !supabaseUrl.includes('your-supabase-url')) {
+    if (isSupabaseConfigured) {
+      setLoading(true);
       try {
-        const tempSupabase = createClient(supabaseUrl, supabaseAnonKey, {
-          auth: { persistSession: false }
-        });
-        
-        // Register in Supabase Auth
-        const { data: authData, error: authError } = await tempSupabase.auth.signUp({
-          email: formData.email.trim(),
-          password: formData.password,
-          options: {
-            data: {
-              full_name: formData.name,
-              role: formData.role,
+        // Register in Supabase Auth (optional, best-effort)
+        try {
+          await supabase.auth.signUp({
+            email: formData.email.trim(),
+            password: formData.password,
+            options: {
+              data: {
+                full_name: formData.name,
+                role: formData.role,
+              }
             }
-          }
-        });
-
-        // Try to insert in databases users or profiles tables if they exist
-        if (!authError && authData?.user) {
-          try {
-            await tempSupabase.from('users').insert([{
-              id: authData.user.id,
-              name: formData.name,
-              email: formData.email.trim(),
-              role: formData.role,
-              status: formData.status
-            }]);
-          } catch (e) {
-            // Ignore if users table doesn't exist
-          }
-
-          try {
-            await tempSupabase.from('profiles').insert([{
-              id: authData.user.id,
-              full_name: formData.name,
-              email: formData.email.trim(),
-              role: formData.role
-            }]);
-          } catch (e) {
-            // Ignore if profiles table doesn't exist
-          }
+          });
+        } catch (authErr) {
+          console.warn('Supabase Auth signUp failed or not supported:', authErr);
         }
-      } catch (err) {
-        console.error('Error auto-registering user in Supabase:', err);
-      }
-    }
 
-    const updated = [...users, newUser];
-    saveUsers(updated);
-    setIsModalOpen(false);
-    setToast({ type: 'success', message: `تمت إضافة المستخدم (${formData.name}) بنجاح كـ ${formData.role === 'admin' ? 'مدير نظام' : 'موظف HR'}` });
+        // Insert into system_users table
+        const { error: insertError } = await supabase
+          .from('system_users')
+          .insert([{
+            name: formData.name,
+            username: trimmedUsername,
+            email: formData.email.trim(),
+            role: formData.role,
+            status: formData.status,
+            password: formData.password,
+            created_at: new Date().toISOString().split('T')[0]
+          }]);
+
+        if (insertError) throw insertError;
+
+        setToast({ type: 'success', message: `تمت إضافة المستخدم (${formData.name}) بنجاح كـ ${formData.role === 'admin' ? 'مدير نظام' : 'موظف HR'}` });
+        await loadUsers();
+        setIsModalOpen(false);
+      } catch (err: any) {
+        setToast({ type: 'error', message: err.message || 'فشلت إضافة المستخدم لقاعدة البيانات' });
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      setToast({ type: 'error', message: 'يرجى تكوين قاعدة بيانات Supabase أولاً للقيام بهذه العملية' });
+    }
   };
 
-  const handleDeleteConfirm = () => {
+  const handleDeleteConfirm = async () => {
     if (!deleteCandidateId) return;
 
     // Prevent deleting the main admin
@@ -222,10 +218,28 @@ export default function UsersPage() {
       return;
     }
 
-    const updated = users.filter(u => u.id !== deleteCandidateId);
-    saveUsers(updated);
-    setToast({ type: 'success', message: 'تم حذف مستخدم النظام بنجاح' });
-    setDeleteCandidateId(null);
+    if (isSupabaseConfigured) {
+      setLoading(true);
+      try {
+        const { error: deleteError } = await supabase
+          .from('system_users')
+          .delete()
+          .eq('id', deleteCandidateId);
+
+        if (deleteError) throw deleteError;
+
+        setToast({ type: 'success', message: 'تم حذف مستخدم النظام بنجاح' });
+        await loadUsers();
+      } catch (err: any) {
+        setToast({ type: 'error', message: err.message || 'فشل حذف المستخدم من قاعدة البيانات' });
+      } finally {
+        setLoading(false);
+        setDeleteCandidateId(null);
+      }
+    } else {
+      setToast({ type: 'error', message: 'يرجى تكوين قاعدة بيانات Supabase أولاً للقيام بهذه العملية' });
+      setDeleteCandidateId(null);
+    }
   };
 
   const filteredUsers = users.filter(user => {
@@ -280,6 +294,18 @@ export default function UsersPage() {
           <span>إضافة مستخدم جديد</span>
         </button>
       </div>
+
+      {!isSupabaseConfigured && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl p-4.5 flex gap-3 text-sm leading-relaxed">
+          <Database className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-bold">تنبيه: لم يتم ربط قاعدة بيانات Supabase بشكل صحيح</p>
+            <p className="mt-1 font-light text-amber-750">
+              يرجى التأكد من ضبط متغيرات البيئة <code className="bg-amber-100 px-1.5 py-0.5 rounded text-xs font-mono">VITE_SUPABASE_URL</code> و <code className="bg-amber-100 px-1.5 py-0.5 rounded text-xs font-mono">VITE_SUPABASE_ANON_KEY</code> في إعدادات AI Studio ليتطابقا تماماً مع مشروع Vercel لضمان مزامنة مستخدمي النظام وموظفيه بشكل فوري وتلقائي بين البيئتين.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Searching / Filtering row */}
       <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm shadow-slate-100/20 flex flex-col md:flex-row items-center gap-3">

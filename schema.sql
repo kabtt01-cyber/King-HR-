@@ -82,3 +82,32 @@ VALUES (
     8500.00,
     'نشط'
 ) ON CONFLICT (employee_code) DO NOTHING;
+
+-- 7. Create system_users table for persistent administrative system users
+CREATE TABLE IF NOT EXISTS public.system_users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(255) NOT NULL,
+    username VARCHAR(100) UNIQUE NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    role VARCHAR(50) NOT NULL DEFAULT 'hr', -- 'admin', 'hr'
+    status VARCHAR(50) NOT NULL DEFAULT 'نشط', -- 'نشط', 'غير نشط'
+    password VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Enable RLS for system_users
+ALTER TABLE public.system_users ENABLE ROW LEVEL SECURITY;
+
+-- Policies for public testing/synchronization across origins (Vercel and AI Studio)
+CREATE POLICY "Allow public read access to system_users" ON public.system_users FOR SELECT USING (true);
+CREATE POLICY "Allow public insert access to system_users" ON public.system_users FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update access to system_users" ON public.system_users FOR UPDATE USING (true) WITH CHECK (true);
+CREATE POLICY "Allow public delete access to system_users" ON public.system_users FOR DELETE USING (true);
+
+-- Insert initial system users if they don't exist
+INSERT INTO public.system_users (name, username, email, role, status, password, created_at)
+VALUES 
+('مسؤول النظام', 'admin', 'admin@hr.com', 'admin', 'نشط', 'Admin@123', '2026-01-10T00:00:00Z'),
+('HR 1', 'hr1', 'hr1@hr.com', 'hr', 'نشط', 'Hr@12345', '2026-03-15T00:00:00Z'),
+('HR 2', 'hr2', 'hr2@hr.com', 'hr', 'نشط', 'Hr@54321', '2026-05-20T00:00:00Z')
+ON CONFLICT (email) DO NOTHING;

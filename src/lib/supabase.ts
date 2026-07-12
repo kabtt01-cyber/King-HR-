@@ -8,7 +8,9 @@ const supabaseAnonKey = (meta.env?.VITE_SUPABASE_ANON_KEY as string) || '';
 export const isSupabaseConfigured = 
   supabaseUrl && 
   supabaseAnonKey && 
+  (supabaseUrl.startsWith('http://') || supabaseUrl.startsWith('https://')) &&
   !supabaseUrl.includes('your-supabase-url') && 
+  !supabaseUrl.includes('VITE_SUPABASE_ANON_KEY') &&
   !supabaseAnonKey.includes('your-supabase-anon-key');
 
 // Initialize the client. If not configured, we'll use fallback values or handle gracefully in code

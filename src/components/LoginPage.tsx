@@ -95,54 +95,80 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
         }
       }
 
-      // Local fallback checking hr_system_users_list
-      if (!loggedIn) {
-        const localUsersStr = localStorage.getItem('hr_system_users_list');
-        let localUsers: any[] = [];
-        if (localUsersStr) {
-          try {
-            localUsers = JSON.parse(localUsersStr);
-          } catch (e) {}
-        }
+      // Check our system_users table in Supabase
+      if (isSupabaseConfigured && !loggedIn) {
+        try {
+          const inputLower = email.trim().toLowerCase();
+          const { data: dbUsers, error: dbError } = await supabase
+            .from('system_users')
+            .select('*');
 
-        if (localUsers.length === 0) {
-          localUsers = [
-            {
-              id: '1',
-              name: 'مسؤول النظام',
-              email: 'admin@hr.com',
-              role: 'admin',
-              status: 'نشط',
-              created_at: '2026-01-10',
-              password: 'Admin@123',
-              username: 'admin'
-            },
-            {
-              id: '2',
-              name: 'HR 1',
-              email: 'hr1@hr.com',
-              role: 'hr',
-              status: 'نشط',
-              created_at: '2026-03-15',
-              password: 'Hr@12345',
-              username: 'hr1'
-            },
-            {
-              id: '3',
-              name: 'HR 2',
-              email: 'hr2@hr.com',
-              role: 'hr',
-              status: 'نشط',
-              created_at: '2026-05-20',
-              password: 'Hr@54321',
-              username: 'hr2'
+          if (!dbError && dbUsers) {
+            const matchedUser = dbUsers.find((u: any) => 
+              (u.email?.toLowerCase() === inputLower || 
+               u.username?.toLowerCase() === inputLower || 
+               u.name?.toLowerCase() === inputLower) && 
+              u.password === password
+            );
+
+            if (matchedUser) {
+              if (matchedUser.status === 'غير نشط') {
+                setError('هذا الحساب غير نشط حالياً. يرجى مراجعة مسؤول النظام.');
+                setLoading(false);
+                return;
+              }
+
+              sessionData = {
+                email: matchedUser.email,
+                isDemo: false,
+                name: matchedUser.name,
+                role: matchedUser.role,
+              };
+              loggedIn = true;
             }
-          ];
-          localStorage.setItem('hr_system_users_list', JSON.stringify(localUsers));
+          }
+        } catch (e) {
+          console.warn('Failed to fetch from system_users in Supabase:', e);
         }
+      }
+
+      // If Supabase is not configured, allow memory-only fallback for demo/testing
+      if (!loggedIn && !isSupabaseConfigured) {
+        const initialUsers = [
+          {
+            id: '1',
+            name: 'مسؤول النظام',
+            email: 'admin@hr.com',
+            role: 'admin',
+            status: 'نشط',
+            created_at: '2026-01-10',
+            password: 'Admin@123',
+            username: 'admin'
+          },
+          {
+            id: '2',
+            name: 'HR 1',
+            email: 'hr1@hr.com',
+            role: 'hr',
+            status: 'نشط',
+            created_at: '2026-03-15',
+            password: 'Hr@12345',
+            username: 'hr1'
+          },
+          {
+            id: '3',
+            name: 'HR 2',
+            email: 'hr2@hr.com',
+            role: 'hr',
+            status: 'نشط',
+            created_at: '2026-05-20',
+            password: 'Hr@54321',
+            username: 'hr2'
+          }
+        ];
 
         const inputLower = email.trim().toLowerCase();
-        const matchedUser = localUsers.find(u => 
+        const matchedUser = initialUsers.find(u => 
           (u.email?.toLowerCase() === inputLower || 
            u.username?.toLowerCase() === inputLower || 
            u.name?.toLowerCase() === inputLower) && 
@@ -150,12 +176,6 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
         );
 
         if (matchedUser) {
-          if (matchedUser.status === 'غير نشط') {
-            setError('هذا الحساب غير نشط حالياً. يرجى مراجعة مسؤول النظام.');
-            setLoading(false);
-            return;
-          }
-
           sessionData = {
             email: matchedUser.email,
             isDemo: true,

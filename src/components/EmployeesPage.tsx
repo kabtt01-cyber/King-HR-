@@ -109,7 +109,7 @@ CREATE POLICY "Allow public delete access" ON public.employees FOR DELETE USING 
     setLoading(true);
     setError(null);
 
-    if (isSupabaseConfigured && !usingLocalStorage) {
+    if (isSupabaseConfigured) {
       try {
         const { data, error: sbError } = await supabase
           .from('employees')
@@ -125,36 +125,19 @@ CREATE POLICY "Allow public delete access" ON public.employees FOR DELETE USING 
           setUsingLocalStorage(false);
         }
       } catch (err: any) {
-        console.warn('Supabase employees query failed, falling back to local storage', err);
-        loadFromLocalStorage();
+        console.warn('Supabase employees query failed:', err);
+        // Fallback state in UI but not writing to Local Storage
+        setEmployees(getInitialDemoEmployees());
         setUsingLocalStorage(true);
       } finally {
         setLoading(false);
       }
     } else {
-      loadFromLocalStorage();
+      // Memory-only fallback state if not configured
+      setEmployees(getInitialDemoEmployees());
+      setUsingLocalStorage(true);
       setLoading(false);
     }
-  };
-
-  const loadFromLocalStorage = () => {
-    const localData = localStorage.getItem('hr_local_employees');
-    if (localData) {
-      try {
-        setEmployees(JSON.parse(localData));
-      } catch (e) {
-        setEmployees(getInitialDemoEmployees());
-      }
-    } else {
-      const demo = getInitialDemoEmployees();
-      setEmployees(demo);
-      localStorage.setItem('hr_local_employees', JSON.stringify(demo));
-    }
-  };
-
-  const saveToLocalStorage = (updatedList: Employee[]) => {
-    setEmployees(updatedList);
-    localStorage.setItem('hr_local_employees', JSON.stringify(updatedList));
   };
 
   const addActivityLog = (action: string, type: 'add' | 'edit' | 'delete' | 'status') => {
@@ -325,7 +308,7 @@ CREATE POLICY "Allow public delete access" ON public.employees FOR DELETE USING 
     e.preventDefault();
     setLoading(true);
 
-    if (isSupabaseConfigured && !usingLocalStorage) {
+    if (isSupabaseConfigured) {
       try {
         if (editingEmployee) {
           // Update record in Supabase
@@ -366,25 +349,7 @@ CREATE POLICY "Allow public delete access" ON public.employees FOR DELETE USING 
         setLoading(false);
       }
     } else {
-      // Local Storage Mode
-      if (editingEmployee) {
-        const updated = employees.map(emp => 
-          emp.id === editingEmployee.id ? { ...emp, ...formData } : emp
-        );
-        saveToLocalStorage(updated);
-        addActivityLog(`تعديل بيانات الموظف ${formData.full_name} (${formData.employee_code}) محلياً`, 'edit');
-        showToast('success', `تم تعديل الموظف (${formData.full_name}) محلياً`);
-      } else {
-        const newEmp: Employee = {
-          id: Math.random().toString(36).substring(2, 11),
-          ...formData,
-        };
-        const updated = [newEmp, ...employees];
-        saveToLocalStorage(updated);
-        addActivityLog(`إضافة الموظف الجديد ${formData.full_name} (${formData.employee_code}) محلياً`, 'add');
-        showToast('success', `تمت إضافة الموظف (${formData.full_name}) محلياً`);
-      }
-      setIsModalOpen(false);
+      showToast('error', 'يرجى تكوين قاعدة بيانات Supabase أولاً للقيام بهذه العملية');
       setLoading(false);
     }
   };
@@ -396,7 +361,7 @@ CREATE POLICY "Allow public delete access" ON public.employees FOR DELETE USING 
 
     const targetEmployeeName = employees.find(emp => emp.id === deleteCandidateId)?.full_name || 'الموظف';
 
-    if (isSupabaseConfigured && !usingLocalStorage) {
+    if (isSupabaseConfigured) {
       try {
         const { error: sbError } = await supabase
           .from('employees')
@@ -414,10 +379,7 @@ CREATE POLICY "Allow public delete access" ON public.employees FOR DELETE USING 
         setDeleteCandidateId(null);
       }
     } else {
-      const updated = employees.filter(emp => emp.id !== deleteCandidateId);
-      saveToLocalStorage(updated);
-      addActivityLog(`حذف ملف الموظف ${targetEmployeeName} محلياً`, 'delete');
-      showToast('success', `تم حذف الموظف (${targetEmployeeName}) محلياً`);
+      showToast('error', 'يرجى تكوين قاعدة بيانات Supabase أولاً للقيام بهذه العملية');
       setLoading(false);
       setDeleteCandidateId(null);
     }
@@ -518,6 +480,18 @@ CREATE POLICY "Allow public delete access" ON public.employees FOR DELETE USING 
           <span>إضافة موظف جديد</span>
         </button>
       </div>
+
+      {!isSupabaseConfigured && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl p-4.5 flex gap-3 text-sm leading-relaxed">
+          <Database className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-bold">تنبيه: لم يتم ربط قاعدة بيانات Supabase بشكل صحيح</p>
+            <p className="mt-1 font-light text-amber-750">
+              يرجى التأكد من ضبط متغيرات البيئة <code className="bg-amber-100 px-1.5 py-0.5 rounded text-xs font-mono">VITE_SUPABASE_URL</code> و <code className="bg-amber-100 px-1.5 py-0.5 rounded text-xs font-mono">VITE_SUPABASE_ANON_KEY</code> في إعدادات AI Studio ليتطابقا تماماً مع مشروع Vercel لضمان مزامنة مستخدمي النظام وموظفيه بشكل فوري وتلقائي بين البيئتين.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Filters, Search & Sorting Bar */}
       <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm shadow-slate-100/20 flex flex-col md:flex-row items-center gap-3">
