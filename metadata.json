@@ -1,0 +1,6 @@
+{
+  "name": "Simple HR System",
+  "description": "نظام إدارة الموارد البشرية البسيط والاحترافي مع دعم كامل للغة العربية واتجاه RTL.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
