@@ -37,86 +37,139 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
     }
 
     try {
+      let loggedIn = false;
+      let sessionData: any = null;
+
       if (isSupabaseConfigured) {
-        let { data, error: sbError } = await supabase.auth.signInWithPassword({
-          email: loginEmail,
-          password,
-        });
+        try {
+          let { data, error: sbError } = await supabase.auth.signInWithPassword({
+            email: loginEmail,
+            password,
+          });
 
-        // Auto-provisioning/sign-up for our 3 demo accounts on first login attempt if they don't exist in Supabase yet
-        if (sbError && (loginEmail === 'admin@hr.com' || loginEmail === 'hr1@hr.com' || loginEmail === 'hr2@hr.com')) {
-          const isCorrectPassword = 
-            (loginEmail === 'admin@hr.com' && password === 'Admin@123') ||
-            (loginEmail === 'hr1@hr.com' && password === 'Hr@12345') ||
-            (loginEmail === 'hr2@hr.com' && password === 'Hr@54321');
+          // Auto-provisioning/sign-up for our 3 demo accounts on first login attempt if they don't exist in Supabase yet
+          if (sbError && (loginEmail === 'admin@hr.com' || loginEmail === 'hr1@hr.com' || loginEmail === 'hr2@hr.com')) {
+            const isCorrectPassword = 
+              (loginEmail === 'admin@hr.com' && password === 'Admin@123') ||
+              (loginEmail === 'hr1@hr.com' && password === 'Hr@12345') ||
+              (loginEmail === 'hr2@hr.com' && password === 'Hr@54321');
 
-          if (isCorrectPassword) {
-            const role = loginEmail === 'admin@hr.com' ? 'admin' : 'hr';
-            const name = loginEmail === 'admin@hr.com' ? 'مسؤول النظام' : (loginEmail === 'hr1@hr.com' ? 'HR 1' : 'HR 2');
-            
-            const { error: signUpError } = await supabase.auth.signUp({
-              email: loginEmail,
-              password,
-              options: {
-                data: {
-                  full_name: name,
-                  role: role,
-                }
-              }
-            });
-
-            if (!signUpError) {
-              const retry = await supabase.auth.signInWithPassword({
+            if (isCorrectPassword) {
+              const role = loginEmail === 'admin@hr.com' ? 'admin' : 'hr';
+              const name = loginEmail === 'admin@hr.com' ? 'مسؤول النظام' : (loginEmail === 'hr1@hr.com' ? 'HR 1' : 'HR 2');
+              
+              const { error: signUpError } = await supabase.auth.signUp({
                 email: loginEmail,
                 password,
+                options: {
+                  data: {
+                    full_name: name,
+                    role: role,
+                  }
+                }
               });
-              data = retry.data;
-              sbError = retry.error;
+
+              if (!signUpError) {
+                const retry = await supabase.auth.signInWithPassword({
+                  email: loginEmail,
+                  password,
+                });
+                data = retry.data;
+                sbError = retry.error;
+              }
             }
           }
+
+          if (!sbError && data?.user) {
+            const assignedRole: 'admin' | 'hr' = (data.user.email?.toLowerCase().includes('hr') || data.user.user_metadata?.role === 'hr') ? 'hr' : 'admin';
+            sessionData = {
+              email: data.user.email || loginEmail,
+              isDemo: false,
+              name: data.user.user_metadata?.full_name || (assignedRole === 'admin' ? 'مسؤول النظام' : 'أخصائي HR'),
+              role: assignedRole,
+            };
+            loggedIn = true;
+          }
+        } catch (e) {
+          console.warn('Supabase auth attempt failed, trying local fallback...', e);
+        }
+      }
+
+      // Local fallback checking hr_system_users_list
+      if (!loggedIn) {
+        const localUsersStr = localStorage.getItem('hr_system_users_list');
+        let localUsers: any[] = [];
+        if (localUsersStr) {
+          try {
+            localUsers = JSON.parse(localUsersStr);
+          } catch (e) {}
         }
 
-        if (sbError) {
-          throw sbError;
+        if (localUsers.length === 0) {
+          localUsers = [
+            {
+              id: '1',
+              name: 'مسؤول النظام',
+              email: 'admin@hr.com',
+              role: 'admin',
+              status: 'نشط',
+              created_at: '2026-01-10',
+              password: 'Admin@123',
+              username: 'admin'
+            },
+            {
+              id: '2',
+              name: 'HR 1',
+              email: 'hr1@hr.com',
+              role: 'hr',
+              status: 'نشط',
+              created_at: '2026-03-15',
+              password: 'Hr@12345',
+              username: 'hr1'
+            },
+            {
+              id: '3',
+              name: 'HR 2',
+              email: 'hr2@hr.com',
+              role: 'hr',
+              status: 'نشط',
+              created_at: '2026-05-20',
+              password: 'Hr@54321',
+              username: 'hr2'
+            }
+          ];
+          localStorage.setItem('hr_system_users_list', JSON.stringify(localUsers));
         }
 
-        if (data?.user) {
-          const assignedRole: 'admin' | 'hr' = (data.user.email?.toLowerCase().includes('hr') || data.user.user_metadata?.role === 'hr') ? 'hr' : 'admin';
-          onLoginSuccess({
-            email: data.user.email || loginEmail,
-            isDemo: false,
-            name: data.user.user_metadata?.full_name || (assignedRole === 'admin' ? 'مسؤول النظام' : 'أخصائي HR'),
-            role: assignedRole,
-          });
-        }
-      } else {
-        // Local simulation / Mock users
         const inputLower = email.trim().toLowerCase();
-        
-        if ((inputLower === 'admin' || inputLower === 'admin@hr.com') && password === 'Admin@123') {
-          onLoginSuccess({
-            email: 'admin@hr.com',
+        const matchedUser = localUsers.find(u => 
+          (u.email?.toLowerCase() === inputLower || 
+           u.username?.toLowerCase() === inputLower || 
+           u.name?.toLowerCase() === inputLower) && 
+          u.password === password
+        );
+
+        if (matchedUser) {
+          if (matchedUser.status === 'غير نشط') {
+            setError('هذا الحساب غير نشط حالياً. يرجى مراجعة مسؤول النظام.');
+            setLoading(false);
+            return;
+          }
+
+          sessionData = {
+            email: matchedUser.email,
             isDemo: true,
-            name: 'مسؤول النظام',
-            role: 'admin',
-          });
-        } else if ((inputLower === 'hr1' || inputLower === 'hr1@hr.com') && password === 'Hr@12345') {
-          onLoginSuccess({
-            email: 'hr1@hr.com',
-            isDemo: true,
-            name: 'HR 1',
-            role: 'hr',
-          });
-        } else if ((inputLower === 'hr2' || inputLower === 'hr2@hr.com') && password === 'Hr@54321') {
-          onLoginSuccess({
-            email: 'hr2@hr.com',
-            isDemo: true,
-            name: 'HR 2',
-            role: 'hr',
-          });
-        } else {
-          setError('اسم المستخدم أو كلمة المرور غير صحيحة.');
+            name: matchedUser.name,
+            role: matchedUser.role,
+          };
+          loggedIn = true;
         }
+      }
+
+      if (loggedIn && sessionData) {
+        onLoginSuccess(sessionData);
+      } else {
+        setError('اسم المستخدم أو كلمة المرور غير صحيحة.');
       }
     } catch (err: any) {
       setError(err.message || 'حدث خطأ أثناء تسجيل الدخول');

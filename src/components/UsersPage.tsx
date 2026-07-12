@@ -5,14 +5,17 @@ import {
   Lock, CheckCircle2, XCircle, Search, Filter, KeyRound, AlertCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { createClient } from '@supabase/supabase-js';
 
 interface SystemUser {
   id: string;
   name: string;
+  username?: string;
   email: string;
   role: 'admin' | 'hr';
   status: 'نشط' | 'غير نشط';
   created_at: string;
+  password?: string;
 }
 
 export default function UsersPage() {
@@ -28,6 +31,7 @@ export default function UsersPage() {
   // Form State
   const [formData, setFormData] = useState({
     name: '',
+    username: '',
     email: '',
     password: '',
     role: 'hr' as 'admin' | 'hr',
@@ -74,26 +78,32 @@ export default function UsersPage() {
       {
         id: '1',
         name: 'مسؤول النظام',
+        username: 'admin',
         email: 'admin@hr.com',
         role: 'admin',
         status: 'نشط',
         created_at: '2026-01-10',
+        password: 'Admin@123',
       },
       {
         id: '2',
         name: 'HR 1',
+        username: 'hr1',
         email: 'hr1@hr.com',
         role: 'hr',
         status: 'نشط',
         created_at: '2026-03-15',
+        password: 'Hr@12345',
       },
       {
         id: '3',
         name: 'HR 2',
+        username: 'hr2',
         email: 'hr2@hr.com',
         role: 'hr',
         status: 'نشط',
         created_at: '2026-05-20',
+        password: 'Hr@54321',
       }
     ];
   };
@@ -101,6 +111,7 @@ export default function UsersPage() {
   const handleOpenAddModal = () => {
     setFormData({
       name: '',
+      username: '',
       email: '',
       password: '',
       role: 'hr',
@@ -109,27 +120,90 @@ export default function UsersPage() {
     setIsModalOpen(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name || !formData.email || !formData.password) {
+    if (!formData.name || !formData.username || !formData.email || !formData.password) {
       setToast({ type: 'error', message: 'يرجى ملء جميع الحقول المطلوبة' });
       return;
     }
 
+    const trimmedUsername = formData.username.trim().toLowerCase();
+    const trimmedEmail = formData.email.trim().toLowerCase();
+
     // Check duplicate email
-    if (users.some(u => u.email.toLowerCase() === formData.email.toLowerCase())) {
+    if (users.some(u => u.email.toLowerCase() === trimmedEmail)) {
       setToast({ type: 'error', message: 'البريد الإلكتروني هذا مستخدم بالفعل في النظام' });
+      return;
+    }
+
+    // Check duplicate username
+    if (users.some(u => u.username?.toLowerCase() === trimmedUsername)) {
+      setToast({ type: 'error', message: 'اسم المستخدم هذا غير متاح، يرجى اختيار اسم آخر' });
       return;
     }
 
     const newUser: SystemUser = {
       id: Math.random().toString(36).substring(2, 11),
       name: formData.name,
-      email: formData.email,
+      username: trimmedUsername,
+      email: formData.email.trim(),
       role: formData.role,
       status: formData.status,
+      password: formData.password,
       created_at: new Date().toISOString().split('T')[0],
     };
+
+    // If Supabase environment is active, attempt to register user in Supabase Authentication
+    const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL || '';
+    const supabaseAnonKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || '';
+    
+    if (supabaseUrl && supabaseAnonKey && !supabaseUrl.includes('your-supabase-url')) {
+      try {
+        const tempSupabase = createClient(supabaseUrl, supabaseAnonKey, {
+          auth: { persistSession: false }
+        });
+        
+        // Register in Supabase Auth
+        const { data: authData, error: authError } = await tempSupabase.auth.signUp({
+          email: formData.email.trim(),
+          password: formData.password,
+          options: {
+            data: {
+              full_name: formData.name,
+              role: formData.role,
+            }
+          }
+        });
+
+        // Try to insert in databases users or profiles tables if they exist
+        if (!authError && authData?.user) {
+          try {
+            await tempSupabase.from('users').insert([{
+              id: authData.user.id,
+              name: formData.name,
+              email: formData.email.trim(),
+              role: formData.role,
+              status: formData.status
+            }]);
+          } catch (e) {
+            // Ignore if users table doesn't exist
+          }
+
+          try {
+            await tempSupabase.from('profiles').insert([{
+              id: authData.user.id,
+              full_name: formData.name,
+              email: formData.email.trim(),
+              role: formData.role
+            }]);
+          } catch (e) {
+            // Ignore if profiles table doesn't exist
+          }
+        }
+      } catch (err) {
+        console.error('Error auto-registering user in Supabase:', err);
+      }
+    }
 
     const updated = [...users, newUser];
     saveUsers(updated);
@@ -261,7 +335,10 @@ export default function UsersPage() {
                       </div>
                       <div>
                         <h4 className="font-semibold text-slate-800">{user.name}</h4>
-                        <span className="text-[10px] text-slate-400 font-light">معرف: {user.id}</span>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="text-[10px] text-indigo-600 font-mono bg-indigo-50 px-1.5 py-0.5 rounded-md">@{user.username || user.email.split('@')[0]}</span>
+                          <span className="text-[10px] text-slate-400 font-light">معرف: {user.id}</span>
+                        </div>
                       </div>
                     </div>
                   </td>
@@ -382,13 +459,26 @@ export default function UsersPage() {
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-500 mb-1.5">اسم المستخدم الثنائي</label>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1.5">الاسم الكامل (يظهر في النظام)</label>
                   <input
                     type="text"
                     required
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     placeholder="مثال: صالح محمد"
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:bg-white rounded-xl text-sm outline-none transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1.5">اسم المستخدم للدخول (Username)</label>
+                  <input
+                    type="text"
+                    required
+                    dir="ltr"
+                    value={formData.username}
+                    onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                    placeholder="مثال: saleh, hr3"
                     className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:bg-white rounded-xl text-sm outline-none transition-all"
                   />
                 </div>
