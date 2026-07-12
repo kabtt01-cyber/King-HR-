@@ -193,7 +193,7 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
             <Sparkles className="w-7 h-7" />
           </div>
           <h1 className="text-2xl font-bold text-slate-800 tracking-tight">بوابة الموارد البشرية والرواتب</h1>
-          <p className="text-slate-400 text-sm mt-2 font-light">الرجاء تسجيل الدخول أو اختيار دور تجريبي سريع</p>
+          <p className="text-slate-400 text-sm mt-2 font-light">الرجاء تسجيل الدخول للوصول إلى النظام</p>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-5">
@@ -250,21 +250,6 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
             {loading ? 'جاري التحقق...' : 'تسجيل الدخول'}
           </button>
         </form>
-
-        <div className="mt-8 pt-4 border-t border-slate-50 flex items-center justify-between text-[10px] text-slate-400 font-light">
-          <span>حالة اتصال قاعدة البيانات:</span>
-          {isSupabaseConfigured ? (
-            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-600 font-medium">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-              Supabase متصل
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-50 text-amber-600 font-medium">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-              وضع تجريبي محلي (Offline)
-            </span>
-          )}
-        </div>
       </motion.div>
     </div>
   );
