@@ -1,20 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 
-const meta = import.meta as any;
-const supabaseUrl = (meta.env?.VITE_SUPABASE_URL as string) || '';
-const supabaseAnonKey = (meta.env?.VITE_SUPABASE_ANON_KEY as string) || '';
+export const supabaseUrl = 'https://lydgwyqtbrwzmkilwwpr.supabase.co';
+export const supabaseAnonKey = 'sb_publishable_pqwAhim7_9Ps5z_XAS6-vw_OniV8ogp';
 
-// A helper flag to check if Supabase is fully configured
-export const isSupabaseConfigured = 
-  supabaseUrl && 
-  supabaseAnonKey && 
-  (supabaseUrl.startsWith('http://') || supabaseUrl.startsWith('https://')) &&
-  !supabaseUrl.includes('your-supabase-url') && 
-  !supabaseUrl.includes('VITE_SUPABASE_ANON_KEY') &&
-  !supabaseAnonKey.includes('your-supabase-anon-key');
+// Always configured as we are using the official provided Supabase credentials
+export const isSupabaseConfigured = true;
 
-// Initialize the client. If not configured, we'll use fallback values or handle gracefully in code
-export const supabase = createClient(
-  isSupabaseConfigured ? supabaseUrl : 'https://placeholder.supabase.co',
-  isSupabaseConfigured ? supabaseAnonKey : 'placeholder-key'
-);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+

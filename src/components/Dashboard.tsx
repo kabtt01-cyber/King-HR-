@@ -27,9 +27,6 @@ export default function Dashboard() {
   // Selected employee detail state
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
 
-  // DB Mode Flag - tracks if we are reading from actual Supabase or localStorage fallback
-  const [usingLocalStorage, setUsingLocalStorage] = useState(!isSupabaseConfigured);
-
   // System Logs State
   const [logs, setLogs] = useState<SystemLog[]>([]);
 
@@ -41,54 +38,22 @@ export default function Dashboard() {
     setLoading(true);
     setError(null);
 
-    let fetchedEmployees: Employee[] = [];
+    try {
+      const { data, error: sbError } = await supabase
+        .from('employees')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-    if (isSupabaseConfigured && !usingLocalStorage) {
-      try {
-        const { data, error: sbError } = await supabase
-          .from('employees')
-          .select('*')
-          .order('created_at', { ascending: false });
-
-        if (sbError) throw sbError;
-        if (data) {
-          fetchedEmployees = data as Employee[];
-          setEmployees(fetchedEmployees);
-          setUsingLocalStorage(false);
-        }
-      } catch (err: any) {
-        console.warn('Supabase dashboard query failed, falling back to local storage', err);
-        fetchedEmployees = loadFromLocalStorage();
-        setUsingLocalStorage(true);
-      } finally {
-        setLoading(false);
-      }
-    } else {
-      fetchedEmployees = loadFromLocalStorage();
+      if (sbError) throw sbError;
+      
+      const fetchedEmployees = (data || []) as Employee[];
+      setEmployees(fetchedEmployees);
+      generateLogs(fetchedEmployees);
+    } catch (err: any) {
+      console.warn('Supabase dashboard query failed:', err);
+      setError('فشلت عملية تحميل بيانات لوحة التحكم من قاعدة بيانات Supabase. يرجى التأكد من الاتصال.');
+    } finally {
       setLoading(false);
-    }
-
-    // Generate/Load system logs
-    generateLogs(fetchedEmployees);
-  };
-
-  const loadFromLocalStorage = (): Employee[] => {
-    const localData = localStorage.getItem('hr_local_employees');
-    if (localData) {
-      try {
-        const parsed = JSON.parse(localData);
-        setEmployees(parsed);
-        return parsed;
-      } catch (e) {
-        const demo = getInitialDemoEmployees();
-        setEmployees(demo);
-        return demo;
-      }
-    } else {
-      const demo = getInitialDemoEmployees();
-      setEmployees(demo);
-      localStorage.setItem('hr_local_employees', JSON.stringify(demo));
-      return demo;
     }
   };
 

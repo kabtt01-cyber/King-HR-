@@ -13,7 +13,6 @@ export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
   
   // Search & Filter State
   const [searchTerm, setSearchTerm] = useState('');
@@ -50,41 +49,7 @@ export default function EmployeesPage() {
     status: 'نشط',
   });
 
-  // DB Mode Flag - tracks if we are reading from actual Supabase or localStorage fallback
-  const [usingLocalStorage, setUsingLocalStorage] = useState(!isSupabaseConfigured);
 
-  // SQL Script helper for the user
-  const sqlScript = `-- 1. أنشئ جدول الموظفين في Supabase SQL Editor
-CREATE TABLE IF NOT EXISTS public.employees (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    employee_code VARCHAR(50) UNIQUE NOT NULL,
-    full_name VARCHAR(255) NOT NULL,
-    national_id VARCHAR(50) NOT NULL,
-    phone VARCHAR(50) NOT NULL,
-    email VARCHAR(255) NOT NULL,
-    department VARCHAR(100) NOT NULL,
-    job_title VARCHAR(100) NOT NULL,
-    hire_date DATE NOT NULL DEFAULT CURRENT_DATE,
-    salary NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
-    status VARCHAR(50) NOT NULL DEFAULT 'نشط',
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
--- 2. تفعيل الحماية RLS
-ALTER TABLE public.employees ENABLE ROW LEVEL SECURITY;
-
--- 3. تفعيل سياسات الوصول العام للقراءة والكتابة للتجربة الفورية
-CREATE POLICY "Allow public read access" ON public.employees FOR SELECT USING (true);
-CREATE POLICY "Allow public insert access" ON public.employees FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow public update access" ON public.employees FOR UPDATE USING (true) WITH CHECK (true);
-CREATE POLICY "Allow public delete access" ON public.employees FOR DELETE USING (true);`;
-
-  const copySqlToClipboard = () => {
-    navigator.clipboard.writeText(sqlScript);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
 
   // Auto-dismiss toast
   useEffect(() => {
@@ -122,20 +87,17 @@ CREATE POLICY "Allow public delete access" ON public.employees FOR DELETE USING 
 
         if (data) {
           setEmployees(data as Employee[]);
-          setUsingLocalStorage(false);
         }
       } catch (err: any) {
         console.warn('Supabase employees query failed:', err);
         // Fallback state in UI but not writing to Local Storage
         setEmployees(getInitialDemoEmployees());
-        setUsingLocalStorage(true);
       } finally {
         setLoading(false);
       }
     } else {
       // Memory-only fallback state if not configured
       setEmployees(getInitialDemoEmployees());
-      setUsingLocalStorage(true);
       setLoading(false);
     }
   };
