@@ -1,6 +1,6 @@
 import React from 'react';
 import { PageType, UserSession } from '../types';
-import { LayoutDashboard, Users, LogOut, Sparkles, X } from 'lucide-react';
+import { LayoutDashboard, Users, LogOut, Sparkles, X, UserCog, Settings } from 'lucide-react';
 
 interface SidebarProps {
   currentPage: PageType;
@@ -12,18 +12,37 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ currentPage, setCurrentPage, onLogout, session, isOpen, onClose }: SidebarProps) {
-  const menuItems = [
+  // Define all available menu items
+  const allMenuItems = [
     {
       id: 'dashboard' as PageType,
       label: 'لوحة التحكم',
       icon: LayoutDashboard,
+      roles: ['admin', 'hr'],
     },
     {
       id: 'employees' as PageType,
-      label: 'الموظفين',
+      label: 'إدارة الموظفين',
       icon: Users,
+      roles: ['admin', 'hr'],
+    },
+    {
+      id: 'users' as PageType,
+      label: 'إدارة المستخدمين',
+      icon: UserCog,
+      roles: ['admin'], // Admin only
+    },
+    {
+      id: 'settings' as PageType,
+      label: 'الإعدادات العامة',
+      icon: Settings,
+      roles: ['admin'], // Admin only
     },
   ];
+
+  // Filter based on session user role (defaulting to 'hr' if not specified)
+  const userRole = session?.role || 'hr';
+  const filteredMenuItems = allMenuItems.filter(item => item.roles.includes(userRole));
 
   return (
     <>
@@ -47,7 +66,7 @@ export default function Sidebar({ currentPage, setCurrentPage, onLogout, session
               <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-600/20">
                 <Sparkles className="w-5 h-5" />
               </div>
-              <span className="font-bold text-lg tracking-tight bg-gradient-to-l from-white to-slate-300 bg-clip-text text-transparent">نظام الموارد البشرية</span>
+              <span className="font-bold text-lg tracking-tight bg-gradient-to-l from-white to-slate-300 bg-clip-text text-transparent">نظام الرواتب والـ HR</span>
             </div>
             
             {/* Mobile close button */}
@@ -63,27 +82,33 @@ export default function Sidebar({ currentPage, setCurrentPage, onLogout, session
           {session && (
             <div className="p-4 mx-4 my-4 bg-slate-800/40 border border-slate-800/60 rounded-xl">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center font-bold text-indigo-400">
-                  {session.name ? session.name[0] : 'U'}
+                <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center font-bold text-indigo-400 shrink-0">
+                  {session.role === 'admin' ? 'M' : 'H'}
                 </div>
                 <div className="overflow-hidden">
-                  <h4 className="font-medium text-sm truncate">{session.name || 'مستخدم الموارد'}</h4>
+                  <h4 className="font-semibold text-sm truncate">{session.name || 'مستخدم النظام'}</h4>
                   <p className="text-xs text-slate-400 truncate mt-0.5">{session.email}</p>
                 </div>
               </div>
-              {session.isDemo && (
-                <div className="mt-3 text-center">
-                  <span className="inline-block px-2.5 py-0.5 text-[10px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-full">
-                    حساب تجريبي نشط
-                  </span>
-                </div>
-              )}
+              
+              <div className="mt-3 flex items-center justify-between gap-2">
+                <span className={`inline-block px-2.5 py-0.5 text-[10px] font-bold rounded-full border
+                  ${session.role === 'admin' 
+                    ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' 
+                    : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'}`}>
+                  {session.role === 'admin' ? 'مسؤول النظام (Admin)' : 'قسم شؤون الموظفين (HR)'}
+                </span>
+                
+                {session.isDemo && (
+                  <span className="text-[9px] text-slate-500 font-light shrink-0">وضع تجريبي</span>
+                )}
+              </div>
             </div>
           )}
 
           {/* Navigation Links */}
           <nav className="px-4 space-y-1.5 mt-2">
-            {menuItems.map((item) => {
+            {filteredMenuItems.map((item) => {
               const Icon = item.icon;
               const isActive = currentPage === item.id;
               return (
@@ -122,3 +147,4 @@ export default function Sidebar({ currentPage, setCurrentPage, onLogout, session
     </>
   );
 }
+

@@ -20,40 +20,102 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
     setError(null);
 
     if (!email || !password) {
-      setError('الرجاء إدخال البريد الإلكتروني وكلمة المرور');
+      setError('الرجاء إدخال البريد الإلكتروني أو اسم المستخدم وكلمة المرور');
       setLoading(false);
       return;
     }
 
+    // Resolve username to corresponding email if needed
+    let loginEmail = email.trim();
+    const resolvedLower = loginEmail.toLowerCase();
+    if (resolvedLower === 'admin') {
+      loginEmail = 'admin@hr.com';
+    } else if (resolvedLower === 'hr1') {
+      loginEmail = 'hr1@hr.com';
+    } else if (resolvedLower === 'hr2') {
+      loginEmail = 'hr2@hr.com';
+    }
+
     try {
       if (isSupabaseConfigured) {
-        const { data, error: sbError } = await supabase.auth.signInWithPassword({
-          email,
+        let { data, error: sbError } = await supabase.auth.signInWithPassword({
+          email: loginEmail,
           password,
         });
+
+        // Auto-provisioning/sign-up for our 3 demo accounts on first login attempt if they don't exist in Supabase yet
+        if (sbError && (loginEmail === 'admin@hr.com' || loginEmail === 'hr1@hr.com' || loginEmail === 'hr2@hr.com')) {
+          const isCorrectPassword = 
+            (loginEmail === 'admin@hr.com' && password === 'Admin@123') ||
+            (loginEmail === 'hr1@hr.com' && password === 'Hr@12345') ||
+            (loginEmail === 'hr2@hr.com' && password === 'Hr@54321');
+
+          if (isCorrectPassword) {
+            const role = loginEmail === 'admin@hr.com' ? 'admin' : 'hr';
+            const name = loginEmail === 'admin@hr.com' ? 'مسؤول النظام' : (loginEmail === 'hr1@hr.com' ? 'HR 1' : 'HR 2');
+            
+            const { error: signUpError } = await supabase.auth.signUp({
+              email: loginEmail,
+              password,
+              options: {
+                data: {
+                  full_name: name,
+                  role: role,
+                }
+              }
+            });
+
+            if (!signUpError) {
+              const retry = await supabase.auth.signInWithPassword({
+                email: loginEmail,
+                password,
+              });
+              data = retry.data;
+              sbError = retry.error;
+            }
+          }
+        }
 
         if (sbError) {
           throw sbError;
         }
 
         if (data?.user) {
+          const assignedRole: 'admin' | 'hr' = (data.user.email?.toLowerCase().includes('hr') || data.user.user_metadata?.role === 'hr') ? 'hr' : 'admin';
           onLoginSuccess({
-            email: data.user.email || email,
+            email: data.user.email || loginEmail,
             isDemo: false,
-            name: data.user.user_metadata?.full_name || 'مستخدم متصل',
+            name: data.user.user_metadata?.full_name || (assignedRole === 'admin' ? 'مسؤول النظام' : 'أخصائي HR'),
+            role: assignedRole,
           });
         }
       } else {
-        // Fallback or explicit Demo Login when Supabase is not configured
-        if (email === 'admin@hr.com' && password === 'admin123') {
+        // Local simulation / Mock users
+        const inputLower = email.trim().toLowerCase();
+        
+        if ((inputLower === 'admin' || inputLower === 'admin@hr.com') && password === 'Admin@123') {
           onLoginSuccess({
-            email,
+            email: 'admin@hr.com',
             isDemo: true,
-            name: 'مدير النظام التجريبي',
-            role: 'مدير',
+            name: 'مسؤول النظام',
+            role: 'admin',
+          });
+        } else if ((inputLower === 'hr1' || inputLower === 'hr1@hr.com') && password === 'Hr@12345') {
+          onLoginSuccess({
+            email: 'hr1@hr.com',
+            isDemo: true,
+            name: 'HR 1',
+            role: 'hr',
+          });
+        } else if ((inputLower === 'hr2' || inputLower === 'hr2@hr.com') && password === 'Hr@54321') {
+          onLoginSuccess({
+            email: 'hr2@hr.com',
+            isDemo: true,
+            name: 'HR 2',
+            role: 'hr',
           });
         } else {
-          setError('للدخول التجريبي، استخدم: admin@hr.com و كلمة المرور: admin123 (أو قم بتهيئة مفاتيح Supabase)');
+          setError('اسم المستخدم أو كلمة المرور غير صحيحة.');
         }
       }
     } catch (err: any) {
@@ -61,15 +123,6 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleDemoLogin = () => {
-    onLoginSuccess({
-      email: 'demo@hr.com',
-      isDemo: true,
-      name: 'مستخدم تجريبي',
-      role: 'موارد بشرية',
-    });
   };
 
   return (
@@ -86,8 +139,8 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-600 mb-4 border border-indigo-100">
             <Sparkles className="w-7 h-7" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-800 tracking-tight">نظام الموارد البشرية الذكي</h1>
-          <p className="text-slate-400 text-sm mt-2 font-light">مرحباً بك، الرجاء تسجيل الدخول للمتابعة</p>
+          <h1 className="text-2xl font-bold text-slate-800 tracking-tight">بوابة الموارد البشرية والرواتب</h1>
+          <p className="text-slate-400 text-sm mt-2 font-light">الرجاء تسجيل الدخول أو اختيار دور تجريبي سريع</p>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-5">
@@ -103,24 +156,24 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
           )}
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">البريد الإلكتروني</label>
+            <label className="block text-xs font-semibold text-slate-500 mb-2">البريد الإلكتروني أو اسم المستخدم</label>
             <div className="relative">
               <span className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-slate-400 pointer-events-none">
                 <Mail className="w-5 h-5" />
               </span>
               <input
-                type="email"
+                type="text"
                 dir="ltr"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@hr.com"
+                placeholder="اسم المستخدم أو البريد الإلكتروني"
                 className="w-full pl-4 pr-11 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white transition-all text-sm"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">كلمة المرور</label>
+            <label className="block text-xs font-semibold text-slate-500 mb-2">كلمة المرور</label>
             <div className="relative">
               <span className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-slate-400 pointer-events-none">
                 <KeyRound className="w-5 h-5" />
@@ -145,28 +198,15 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
           </button>
         </form>
 
-        <div className="relative my-6">
-          <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-slate-100"></span></div>
-          <div className="relative flex justify-center text-xs"><span className="px-2 bg-white text-slate-400 font-light">أو قم بالتجربة الفورية</span></div>
-        </div>
-
-        <button
-          onClick={handleDemoLogin}
-          className="w-full py-3 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl font-medium transition-all text-sm flex items-center justify-center gap-2 cursor-pointer"
-        >
-          <UserCheck className="w-4 h-4 text-emerald-500" />
-          <span>الدخول كـ مستخدم تجريبي</span>
-        </button>
-
-        <div className="mt-8 pt-4 border-t border-slate-50 flex items-center justify-between text-xs text-slate-400 font-light">
+        <div className="mt-8 pt-4 border-t border-slate-50 flex items-center justify-between text-[10px] text-slate-400 font-light">
           <span>حالة اتصال قاعدة البيانات:</span>
           {isSupabaseConfigured ? (
-            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-emerald-50 text-emerald-600 font-medium">
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-600 font-medium">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
               Supabase متصل
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-50 text-amber-600 font-medium">
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-50 text-amber-600 font-medium">
               <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
               وضع تجريبي محلي (Offline)
             </span>
@@ -176,3 +216,4 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
     </div>
   );
 }
+

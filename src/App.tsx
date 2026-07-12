@@ -5,6 +5,8 @@ import Sidebar from './components/Sidebar';
 import Topbar from './components/Topbar';
 import Dashboard from './components/Dashboard';
 import EmployeesPage from './components/EmployeesPage';
+import UsersPage from './components/UsersPage';
+import SettingsPage from './components/SettingsPage';
 import { supabase } from './lib/supabase';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -43,11 +45,17 @@ export default function App() {
 
   // Render the current active main content
   const renderContent = () => {
+    const isUserAdmin = session?.role === 'admin';
+
     switch (currentPage) {
       case 'dashboard':
         return <Dashboard />;
       case 'employees':
         return <EmployeesPage />;
+      case 'users':
+        return isUserAdmin ? <UsersPage /> : <Dashboard />;
+      case 'settings':
+        return isUserAdmin ? <SettingsPage /> : <Dashboard />;
       default:
         return <Dashboard />;
     }

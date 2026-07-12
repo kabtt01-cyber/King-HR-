@@ -15,7 +15,11 @@ export default function Topbar({ currentPage, onMenuToggle, session }: TopbarPro
       case 'dashboard':
         return 'لوحة التحكم والمؤشرات';
       case 'employees':
-        return 'إدارة الموظفين';
+        return 'إدارة ملفات الموظفين';
+      case 'users':
+        return 'إدارة مستخدمي النظام والصلاحيات';
+      case 'settings':
+        return 'الإعدادات العامة للنظام';
       default:
         return 'النظام';
     }
@@ -82,11 +86,11 @@ export default function Topbar({ currentPage, onMenuToggle, session }: TopbarPro
             <div className="hidden md:flex flex-col text-right">
               <span className="text-xs font-semibold text-slate-700 leading-3">{session.name || 'مدير'}</span>
               <span className="text-[10px] text-slate-400 font-light mt-0.5">
-                {session.role || 'مسؤول الموارد'}
+                {session.role === 'admin' ? 'مسؤول النظام (Admin)' : 'أخصائي شؤون الموظفين (HR)'}
               </span>
             </div>
             <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center font-bold text-xs text-indigo-600">
-              {session.name ? session.name[0] : 'U'}
+              {session.role === 'admin' ? 'M' : 'H'}
             </div>
           </div>
         )}

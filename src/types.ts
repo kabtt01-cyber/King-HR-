@@ -1,18 +1,25 @@
-export type PageType = 'dashboard' | 'employees' | 'login';
+export type PageType = 'dashboard' | 'employees' | 'users' | 'settings' | 'login';
 
 export interface UserSession {
   email: string;
   isDemo: boolean;
-  role?: string;
+  role?: 'admin' | 'hr';
   name?: string;
 }
 
 export interface Employee {
   id: string;
-  name: string;
+  employee_code: string;
+  full_name: string;
+  national_id: string;
+  phone: string;
   email: string;
   department: string;
-  position: string;
-  status: 'نشط' | 'إجازة' | 'غير نشط';
-  joinDate: string;
+  job_title: string;
+  hire_date: string;
+  salary: number;
+  status: 'نشط' | 'إجازة' | 'غير نشط' | string;
+  created_at?: string;
+  updated_at?: string;
 }
+
